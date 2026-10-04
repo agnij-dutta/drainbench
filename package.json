@@ -1,19 +1,54 @@
 {
   "name": "drainbench",
   "version": "0.1.0",
-  "description": "How often do LLM agents with a payment tool get prompt-injected into paying an attacker? And what actually stops the money from moving?",
-  "type": "module",
+  "description": "Benchmark: how often LLM agents with a pay() tool get prompt-injected into paying an attacker, and which defense layer stops the money.",
+  "keywords": [
+    "llm",
+    "agents",
+    "prompt-injection",
+    "benchmark",
+    "payments",
+    "x402",
+    "security",
+    "agent-security",
+    "ai-safety",
+    "usdc",
+    "tool-use",
+    "red-teaming"
+  ],
+  "homepage": "https://github.com/agnij-dutta/drainbench#readme",
+  "bugs": {
+    "url": "https://github.com/agnij-dutta/drainbench/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agnij-dutta/drainbench.git"
+  },
   "license": "MIT",
-  "author": "Agnij Dutta",
+  "author": {
+    "name": "Agnij Dutta",
+    "url": "https://x.com/0xholmesdev"
+  },
+  "type": "module",
   "bin": {
     "drainbench": "./dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "scenarios",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CITATION.cff"
   ],
   "engines": {
     "node": ">=22"
@@ -27,21 +62,10 @@
     "demo": "tsx src/cli.ts run --models mock:naive,mock:skimmer,mock:refuser,mock:oracle --run-id mock-reference && tsx src/cli.ts leaderboard results/mock-reference.json -o site/index.html",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "lint:fix": "biome check --write ."
+    "lint:fix": "biome check --write .",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/agnij-dutta/drainbench"
-  },
-  "keywords": [
-    "llm",
-    "agents",
-    "prompt-injection",
-    "benchmark",
-    "payments",
-    "x402",
-    "security"
-  ],
   "dependencies": {
     "yaml": "^2.9.1"
   },
