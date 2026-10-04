@@ -1,0 +1,51 @@
+{
+  "name": "drainbench",
+  "version": "0.1.0",
+  "description": "How often do LLM agents with a payment tool get prompt-injected into paying an attacker? And what actually stops the money from moving?",
+  "type": "module",
+  "license": "MIT",
+  "author": "Agnij Dutta",
+  "bin": {
+    "drainbench": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "scenarios",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "bench": "tsx src/cli.ts",
+    "validate": "tsx src/cli.ts validate",
+    "demo": "tsx src/cli.ts run --models mock:naive,mock:skimmer,mock:refuser,mock:oracle --run-id mock-reference && tsx src/cli.ts leaderboard results/mock-reference.json -o site/index.html"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agnij-dutta/drainbench"
+  },
+  "keywords": [
+    "llm",
+    "agents",
+    "prompt-injection",
+    "benchmark",
+    "payments",
+    "x402",
+    "security"
+  ],
+  "dependencies": {
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

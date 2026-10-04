@@ -1,0 +1,178 @@
+#!/usr/bin/env node
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+import { HARNESS_VERSION, runAll } from "./harness.js";
+import { leaderboardHtml } from "./leaderboard.js";
+import { makeProvider } from "./providers/index.js";
+import { markdownReport, pct, usd } from "./report.js";
+import { filterScenarios, loadCorpus } from "./scenarios.js";
+import { scoreTranscript, summarize } from "./score.js";
+import { CATEGORY_LABELS, DEFENSES, DEFENSE_LABELS, type DefenseId, type RunResult } from "./types.js";
+
+const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const DEFAULT_CORPUS = existsSync("scenarios/v1") ? "scenarios/v1" : join(PKG_ROOT, "scenarios/v1");
+
+const HELP = `drainbench: prompt-injection benchmark for LLM agents with a payment tool
+
+Usage:
+  drainbench run [options]                 run models x defenses x scenarios
+  drainbench report <results.json>         print a markdown report
+  drainbench leaderboard <results.json...> [-o site/index.html]
+  drainbench validate [--scenarios dir]    validate the scenario corpus
+  drainbench list [--scenarios dir]        list scenarios
+
+run options:
+  --models     comma list of <provider>:<model>   (default: mock:naive,mock:skimmer,mock:refuser,mock:oracle)
+               providers: mock, groq, openrouter, openai, together, compat, anthropic
+  --defenses   comma list of ${DEFENSES.join(",")} (default: all)
+  --scenarios  corpus dir or file (default: scenarios/v1)
+  --category   comma list of categories to include
+  --ids        comma list of scenario ids (suffix * for prefix match)
+  --limit      stratified sample of N scenarios across categories
+  --concurrency N parallel episodes (default 4)
+  --max-steps  max model calls per user turn (default 8)
+  --run-id     id for runs/<run-id>/ and results/<run-id>.* (reruns reuse cached transcripts)
+  --out        results dir (default results)
+`;
+
+function list(v: string | undefined): string[] | undefined {
+  return v ? v.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+}
+
+async function cmdRun(argv: string[]) {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      models: { type: "string" },
+      defenses: { type: "string" },
+      scenarios: { type: "string" },
+      category: { type: "string" },
+      ids: { type: "string" },
+      limit: { type: "string" },
+      concurrency: { type: "string" },
+      "max-steps": { type: "string" },
+      "run-id": { type: "string" },
+      out: { type: "string" },
+      quiet: { type: "boolean" },
+    },
+  });
+  const corpus = loadCorpus(values.scenarios ?? DEFAULT_CORPUS);
+  const scenarios = filterScenarios(corpus.scenarios, {
+    categories: list(values.category),
+    ids: list(values.ids),
+    limit: values.limit ? Number(values.limit) : undefined,
+  });
+  if (!scenarios.length) throw new Error("no scenarios selected");
+  const providers = (list(values.models) ?? ["mock:naive", "mock:skimmer", "mock:refuser", "mock:oracle"]).map((m) => makeProvider(m));
+  const defenses = (list(values.defenses) ?? [...DEFENSES]) as DefenseId[];
+  for (const d of defenses) if (!DEFENSES.includes(d)) throw new Error(`unknown defense ${d}`);
+  const runId = values["run-id"] ?? new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const runDir = join("runs", runId);
+  const outDir = values.out ?? "results";
+  mkdirSync(runDir, { recursive: true });
+  mkdirSync(outDir, { recursive: true });
+
+  const total = providers.length * defenses.length * scenarios.length;
+  process.stderr.write(`drainbench ${HARNESS_VERSION} · run ${runId} · ${providers.length} models x ${defenses.length} defenses x ${scenarios.length} scenarios = ${total} episodes\n`);
+  let cachedN = 0;
+  const transcripts = await runAll({
+    providers,
+    defenses,
+    scenarios,
+    concurrency: values.concurrency ? Number(values.concurrency) : 4,
+    maxStepsPerTurn: values["max-steps"] ? Number(values["max-steps"]) : 8,
+    runDir,
+    onProgress: (done, n, t, cached) => {
+      if (cached) cachedN++;
+      if (!values.quiet) {
+        const tag = t.error ? `ERROR ${t.error.slice(0, 80)}` : `${t.payments.length} pay call(s)`;
+        process.stderr.write(`[${String(done).padStart(String(n).length)}/${n}] ${t.model} · ${t.defense} · ${t.scenarioId} · ${tag}${cached ? " (cached)" : ""}\n`);
+      }
+    },
+  });
+
+  const byId = new Map(scenarios.map((s) => [s.id, s]));
+  const scores = transcripts.map((t) => scoreTranscript(t, byId.get(t.scenarioId)!));
+  const models = providers.map((p) => p.id);
+  const result: RunResult = {
+    runId,
+    createdAt: new Date().toISOString(),
+    harnessVersion: HARNESS_VERSION,
+    corpusVersion: corpus.version,
+    scenarioCount: scenarios.length,
+    models,
+    defenses,
+    synthetic: providers.every((p) => p.synthetic),
+    results: summarize(scores, scenarios, models, defenses),
+    scores,
+  };
+  const jsonPath = join(outDir, `${runId}.json`);
+  const mdPath = join(outDir, `${runId}.md`);
+  writeFileSync(jsonPath, JSON.stringify(result, null, 2));
+  writeFileSync(mdPath, markdownReport(result));
+  writeFileSync(join(runDir, "meta.json"), JSON.stringify({ runId, corpus: corpus.version, models, defenses, scenarios: scenarios.map((s) => s.id) }, null, 2));
+
+  console.log(`\n${"model".padEnd(36)} ${"defense".padEnd(24)} ${"attempted".padStart(9)} ${"lost".padStart(6)} ${"$ lost".padStart(9)} ${"$ key-comp".padStart(10)} ${"benign".padStart(7)} err`);
+  for (const x of result.results) {
+    const m = x.metrics;
+    console.log(
+      `${x.model.padEnd(36)} ${DEFENSE_LABELS[x.defense].padEnd(24)} ${pct(m.attackSuccessRate).padStart(9)} ${pct(m.fundsLostRate).padStart(6)} ${usd(m.usdLost).padStart(9)} ${usd(m.usdLostKeyCompromised).padStart(10)} ${pct(m.benignSuccessRate).padStart(7)} ${m.errors}`,
+    );
+  }
+  console.log(`\nwrote ${jsonPath}, ${mdPath} · transcripts in ${runDir}/transcripts (${cachedN} cached)`);
+}
+
+function cmdReport(argv: string[]) {
+  const [file] = argv;
+  if (!file) throw new Error("usage: drainbench report <results.json>");
+  console.log(markdownReport(JSON.parse(readFileSync(file, "utf8"))));
+}
+
+function cmdLeaderboard(argv: string[]) {
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { o: { type: "string" }, title: { type: "string" } } });
+  if (!positionals.length) throw new Error("usage: drainbench leaderboard <results.json...> [-o out.html]");
+  const runs = positionals.map((f) => JSON.parse(readFileSync(f, "utf8")) as RunResult);
+  const out = values.o ?? "site/index.html";
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, leaderboardHtml(runs, { title: values.title }));
+  console.log(`wrote ${out}`);
+}
+
+function cmdValidate(argv: string[]) {
+  const { values } = parseArgs({ args: argv, options: { scenarios: { type: "string" } } });
+  const c = loadCorpus(values.scenarios ?? DEFAULT_CORPUS);
+  const counts: Record<string, number> = {};
+  for (const s of c.scenarios) counts[s.category] = (counts[s.category] ?? 0) + 1;
+  console.log(`ok · ${c.scenarios.length} scenarios · ${c.version}`);
+  for (const [k, v] of Object.entries(counts)) console.log(`  ${CATEGORY_LABELS[k as keyof typeof CATEGORY_LABELS].padEnd(26)} ${v}`);
+}
+
+function cmdList(argv: string[]) {
+  const { values } = parseArgs({ args: argv, options: { scenarios: { type: "string" } } });
+  for (const s of loadCorpus(values.scenarios ?? DEFAULT_CORPUS).scenarios) console.log(`${s.id.padEnd(16)} ${s.kind.padEnd(7)} ${s.title}`);
+}
+
+async function main() {
+  const [cmd, ...rest] = process.argv.slice(2);
+  switch (cmd) {
+    case "run":
+      return cmdRun(rest);
+    case "report":
+      return cmdReport(rest);
+    case "leaderboard":
+      return cmdLeaderboard(rest);
+    case "validate":
+      return cmdValidate(rest);
+    case "list":
+      return cmdList(rest);
+    default:
+      console.log(HELP);
+  }
+}
+
+main().catch((e) => {
+  console.error(`error: ${e instanceof Error ? e.message : e}`);
+  process.exit(1);
+});

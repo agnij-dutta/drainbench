@@ -1,0 +1,86 @@
+// OpenAI-compatible Chat Completions adapter. Covers OpenAI, Groq, OpenRouter,
+// Together, and any self-hosted endpoint speaking the same wire format.
+import type { Message, ToolCall } from "../types.js";
+import { postJson, type RetryOptions } from "./http.js";
+import { ProviderError, type CompletionRequest, type CompletionResponse, type Provider } from "./types.js";
+
+export const OPENAI_COMPAT_PRESETS: Record<string, { baseUrl: string; keyEnv: string }> = {
+  openai: { baseUrl: "https://api.openai.com/v1", keyEnv: "OPENAI_API_KEY" },
+  groq: { baseUrl: "https://api.groq.com/openai/v1", keyEnv: "GROQ_API_KEY" },
+  openrouter: { baseUrl: "https://openrouter.ai/api/v1", keyEnv: "OPENROUTER_API_KEY" },
+  together: { baseUrl: "https://api.together.xyz/v1", keyEnv: "TOGETHER_API_KEY" },
+  // generic: set DRAINBENCH_COMPAT_BASE_URL and DRAINBENCH_COMPAT_API_KEY
+  compat: { baseUrl: process.env.DRAINBENCH_COMPAT_BASE_URL ?? "http://localhost:11434/v1", keyEnv: "DRAINBENCH_COMPAT_API_KEY" },
+};
+
+interface OAIToolCall { id: string; type: "function"; function: { name: string; arguments: string } }
+interface OAIResponse {
+  choices: { message: { content: string | null; tool_calls?: OAIToolCall[] } }[];
+  usage?: { prompt_tokens: number; completion_tokens: number };
+}
+
+export function toOpenAIMessages(messages: Message[]): unknown[] {
+  return messages.map((m) => {
+    switch (m.role) {
+      case "system":
+      case "user":
+        return { role: m.role, content: m.content };
+      case "assistant":
+        return {
+          role: "assistant",
+          content: m.content || null,
+          ...(m.toolCalls?.length
+            ? { tool_calls: m.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } })) }
+            : {}),
+        };
+      case "tool":
+        return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
+    }
+  });
+}
+
+export function parseArgs(raw: string | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" ? v : { _raw: raw };
+  } catch {
+    return { _raw: raw };
+  }
+}
+
+export class OpenAICompatProvider implements Provider {
+  readonly synthetic = false;
+  constructor(
+    readonly id: string,
+    private model: string,
+    private baseUrl: string,
+    private apiKey: string,
+    private retry: RetryOptions = {},
+  ) {}
+
+  async complete(req: CompletionRequest): Promise<CompletionResponse> {
+    const body = {
+      model: this.model,
+      messages: toOpenAIMessages(req.messages),
+      tools: req.tools.map((t) => ({ type: "function", function: t })),
+      tool_choice: "auto",
+      temperature: req.temperature ?? 0,
+      max_tokens: req.maxTokens ?? 1024,
+    };
+    const headers: Record<string, string> = { authorization: `Bearer ${this.apiKey}` };
+    if (this.baseUrl.includes("openrouter.ai")) {
+      headers["http-referer"] = "https://github.com/agnij-dutta/drainbench";
+      headers["x-title"] = "Drainbench";
+    }
+    const res = await postJson<OAIResponse>(`${this.baseUrl.replace(/\/$/, "")}/chat/completions`, headers, body, this.retry);
+    const msg = res.choices?.[0]?.message;
+    if (!msg) throw new ProviderError(`empty response: ${JSON.stringify(res).slice(0, 300)}`);
+    const toolCalls: ToolCall[] = (msg.tool_calls ?? []).map((c) => ({ id: c.id, name: c.function.name, args: parseArgs(c.function.arguments) }));
+    return {
+      content: msg.content ?? "",
+      toolCalls,
+      usage: res.usage ? { inputTokens: res.usage.prompt_tokens, outputTokens: res.usage.completion_tokens } : undefined,
+    };
+  }
+}
