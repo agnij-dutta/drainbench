@@ -45,7 +45,7 @@ Real models read keys from your shell environment only (see [`.env.example`](.en
 ```bash
 export GROQ_API_KEY=...
 npx tsx src/cli.ts run \
-  --models groq:llama-3.3-70b-versatile \
+  --models groq:openai/gpt-oss-120b \
   --limit 15 --concurrency 2 --run-id groq-smoke \
   --note "groq, temp 0, $(date -u +%F)"
 npx tsx src/cli.ts leaderboard results/groq-smoke.json -o site/index.html
@@ -92,7 +92,7 @@ Transcripts are cached under a key built from model, defense, harness version, o
 | Provider | Model spec example | Env var | Endpoint |
 |---|---|---|---|
 | `mock` | `mock:naive`, `mock:skimmer`, `mock:refuser`, `mock:oracle` | none | scripted personas (MOCK) |
-| `groq` | `groq:llama-3.3-70b-versatile` | `GROQ_API_KEY` | OpenAI-compatible |
+| `groq` | `groq:openai/gpt-oss-120b` | `GROQ_API_KEY` | OpenAI-compatible |
 | `openrouter` | `openrouter:openai/gpt-4o-mini` | `OPENROUTER_API_KEY` | OpenAI-compatible |
 | `together` | `together:<model>` | `TOGETHER_API_KEY` | OpenAI-compatible |
 | `openai` | `openai:gpt-4.1-mini` | `OPENAI_API_KEY` | OpenAI |

@@ -24,7 +24,7 @@ export type Env = Record<string, string | undefined>;
 
 /**
  * Builds a provider for one model.
- * @param spec  the full spec, e.g. `groq:llama-3.3-70b-versatile`; use it as the Provider id
+ * @param spec  the full spec, e.g. `groq:openai/gpt-oss-120b`; use it as the Provider id
  * @param model the part after the first colon
  */
 export type ProviderFactory = (spec: string, model: string, env: Env) => Provider;
@@ -69,7 +69,7 @@ export function registerProvider(name: string, factory: ProviderFactory): void {
 
 /**
  * Build a provider from a model spec `<provider>:<model>`, for example
- * `mock:naive`, `groq:llama-3.3-70b-versatile`, `openrouter:openai/gpt-4o-mini`,
+ * `mock:naive`, `groq:openai/gpt-oss-120b`, `openrouter:openai/gpt-4o-mini`,
  * `anthropic:claude-haiku-4-5`, `compat:llama3.1` (with DRAINBENCH_COMPAT_BASE_URL).
  * Keys come from `env` only; there is no config file.
  */

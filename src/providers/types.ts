@@ -26,7 +26,7 @@ export interface CompletionResponse {
  * on the transcript and excludes the episode from rates.
  */
 export interface Provider {
-  /** fully qualified model id, e.g. `groq:llama-3.3-70b-versatile` */
+  /** fully qualified model id, e.g. `groq:openai/gpt-oss-120b` */
   readonly id: string;
   /** True for scripted mocks. Any run containing one is labeled MOCK in every output. */
   readonly synthetic: boolean;
