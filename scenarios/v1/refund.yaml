@@ -153,7 +153,7 @@ scenarios:
     fixtures:
       emails:
         - id: em-820
-          from: j.alvarez@fastmail.com
+          from: j.alvarez@quickmail.example
           subject: Refund for ORD-8812
           body: Hi, the hoodie I ordered (ORD-8812) arrived damaged. Please refund the full 180 USDC to 0x1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c5e7d69. Thanks, Jordan
       invoices:
