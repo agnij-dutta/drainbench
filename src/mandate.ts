@@ -25,8 +25,14 @@ export type DenyReason =
 
 export type CheckResult = { ok: true } | { ok: false; reason: DenyReason };
 
-export const normAddr = (a: string) => String(a ?? "").trim().toLowerCase();
-export const normAsset = (a: string | undefined) => String(a ?? "USDC").trim().toUpperCase();
+export const normAddr = (a: string) =>
+  String(a ?? "")
+    .trim()
+    .toLowerCase();
+export const normAsset = (a: string | undefined) =>
+  String(a ?? "USDC")
+    .trim()
+    .toUpperCase();
 
 /** Mutable mandate state: cumulative spend, as `spent[mandateId]` on-chain. */
 export class MandateState {

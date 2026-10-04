@@ -15,7 +15,10 @@ interface AnthropicResponse {
 
 /** Convert internal messages to Anthropic format: system split out, tool results batched into user turns. */
 export function toAnthropic(messages: Message[]): { system: string; messages: { role: "user" | "assistant"; content: Block[] }[] } {
-  const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+  const system = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
   const out: { role: "user" | "assistant"; content: Block[] }[] = [];
   const push = (role: "user" | "assistant", block: Block) => {
     const last = out[out.length - 1];
@@ -37,7 +40,12 @@ export function toAnthropic(messages: Message[]): { system: string; messages: { 
 
 export class AnthropicProvider implements Provider {
   readonly synthetic = false;
-  constructor(readonly id: string, private model: string, private apiKey: string, private retry: RetryOptions = {}) {}
+  constructor(
+    readonly id: string,
+    private model: string,
+    private apiKey: string,
+    private retry: RetryOptions = {},
+  ) {}
 
   async complete(req: CompletionRequest): Promise<CompletionResponse> {
     const { system, messages } = toAnthropic(req.messages);
@@ -54,7 +62,10 @@ export class AnthropicProvider implements Provider {
       },
       this.retry,
     );
-    const text = res.content.filter((b): b is Extract<Block, { type: "text" }> => b.type === "text").map((b) => b.text).join("\n");
+    const text = res.content
+      .filter((b): b is Extract<Block, { type: "text" }> => b.type === "text")
+      .map((b) => b.text)
+      .join("\n");
     const toolCalls: ToolCall[] = res.content
       .filter((b): b is Extract<Block, { type: "tool_use" }> => b.type === "tool_use")
       .map((b) => ({ id: b.id, name: b.name, args: b.input ?? {} }));

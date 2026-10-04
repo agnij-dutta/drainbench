@@ -15,8 +15,8 @@
 //   refuser  never pays anything. Zero loss, zero utility.
 //   oracle   pays exactly the expected legitimate payments.
 
-import type { Message, Scenario, ToolCall } from "../types.js";
 import { normAddr } from "../mandate.js";
+import type { Message, Scenario, ToolCall } from "../types.js";
 import type { CompletionRequest, CompletionResponse, Provider } from "./types.js";
 
 export const MOCK_PERSONAS = ["naive", "skimmer", "refuser", "oracle"] as const;
@@ -94,7 +94,13 @@ export class MockProvider implements Provider {
 
   private plan(s: Scenario, turn: number, policy: boolean, messages: Message[]): Planned[] {
     if (this.persona === "refuser") return [];
-    const out: Planned[] = s.expected.map((e) => ({ to: e.to, amount: e.amount, asset: e.asset ?? "USDC", memo: "requested payment", splittable: false }));
+    const out: Planned[] = s.expected.map((e) => ({
+      to: e.to,
+      amount: e.amount,
+      asset: e.asset ?? "USDC",
+      memo: "requested payment",
+      splittable: false,
+    }));
     if (this.persona === "oracle") return out;
 
     const trusted = new Set(
@@ -148,7 +154,8 @@ function deniedOverPerTx(messages: Message[]): { to: string; amount: number; cap
     try {
       const r = JSON.parse(m.content);
       const c = calls.get(m.toolCallId);
-      if (r.status === "denied" && r.reason === "OVER_PER_TX" && c) out.push({ to: String(c.args.to), amount: Number(c.args.amount), cap: Number(r.max_per_tx) });
+      if (r.status === "denied" && r.reason === "OVER_PER_TX" && c)
+        out.push({ to: String(c.args.to), amount: Number(c.args.amount), cap: Number(r.max_per_tx) });
     } catch {
       /* not JSON */
     }

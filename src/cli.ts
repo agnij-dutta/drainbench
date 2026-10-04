@@ -9,7 +9,7 @@ import { makeProvider } from "./providers/index.js";
 import { markdownReport, pct, usd } from "./report.js";
 import { filterScenarios, loadCorpus } from "./scenarios.js";
 import { scoreTranscript, summarize } from "./score.js";
-import { CATEGORY_LABELS, DEFENSES, DEFENSE_LABELS, type DefenseId, type RunResult } from "./types.js";
+import { CATEGORY_LABELS, DEFENSE_LABELS, DEFENSES, type DefenseId, type RunResult } from "./types.js";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_CORPUS = existsSync("scenarios/v1") ? "scenarios/v1" : join(PKG_ROOT, "scenarios/v1");
@@ -38,7 +38,12 @@ run options:
 `;
 
 function list(v: string | undefined): string[] | undefined {
-  return v ? v.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+  return v
+    ? v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
 }
 
 async function cmdRun(argv: string[]) {
@@ -75,7 +80,9 @@ async function cmdRun(argv: string[]) {
   mkdirSync(outDir, { recursive: true });
 
   const total = providers.length * defenses.length * scenarios.length;
-  process.stderr.write(`drainbench ${HARNESS_VERSION} · run ${runId} · ${providers.length} models x ${defenses.length} defenses x ${scenarios.length} scenarios = ${total} episodes\n`);
+  process.stderr.write(
+    `drainbench ${HARNESS_VERSION} · run ${runId} · ${providers.length} models x ${defenses.length} defenses x ${scenarios.length} scenarios = ${total} episodes\n`,
+  );
   let cachedN = 0;
   const transcripts = await runAll({
     providers,
@@ -88,13 +95,19 @@ async function cmdRun(argv: string[]) {
       if (cached) cachedN++;
       if (!values.quiet) {
         const tag = t.error ? `ERROR ${t.error.slice(0, 80)}` : `${t.payments.length} pay call(s)`;
-        process.stderr.write(`[${String(done).padStart(String(n).length)}/${n}] ${t.model} · ${t.defense} · ${t.scenarioId} · ${tag}${cached ? " (cached)" : ""}\n`);
+        process.stderr.write(
+          `[${String(done).padStart(String(n).length)}/${n}] ${t.model} · ${t.defense} · ${t.scenarioId} · ${tag}${cached ? " (cached)" : ""}\n`,
+        );
       }
     },
   });
 
   const byId = new Map(scenarios.map((s) => [s.id, s]));
-  const scores = transcripts.map((t) => scoreTranscript(t, byId.get(t.scenarioId)!));
+  const scores = transcripts.map((t) => {
+    const s = byId.get(t.scenarioId);
+    if (!s) throw new Error(`internal: transcript for unknown scenario ${t.scenarioId}`);
+    return scoreTranscript(t, s);
+  });
   const models = providers.map((p) => p.id);
   const result: RunResult = {
     runId,
@@ -112,9 +125,14 @@ async function cmdRun(argv: string[]) {
   const mdPath = join(outDir, `${runId}.md`);
   writeFileSync(jsonPath, JSON.stringify(result, null, 2));
   writeFileSync(mdPath, markdownReport(result));
-  writeFileSync(join(runDir, "meta.json"), JSON.stringify({ runId, corpus: corpus.version, models, defenses, scenarios: scenarios.map((s) => s.id) }, null, 2));
+  writeFileSync(
+    join(runDir, "meta.json"),
+    JSON.stringify({ runId, corpus: corpus.version, models, defenses, scenarios: scenarios.map((s) => s.id) }, null, 2),
+  );
 
-  console.log(`\n${"model".padEnd(36)} ${"defense".padEnd(24)} ${"attempted".padStart(9)} ${"lost".padStart(6)} ${"$ lost".padStart(9)} ${"$ key-comp".padStart(10)} ${"benign".padStart(7)} err`);
+  console.log(
+    `\n${"model".padEnd(36)} ${"defense".padEnd(24)} ${"attempted".padStart(9)} ${"lost".padStart(6)} ${"$ lost".padStart(9)} ${"$ key-comp".padStart(10)} ${"benign".padStart(7)} err`,
+  );
   for (const x of result.results) {
     const m = x.metrics;
     console.log(
@@ -131,7 +149,11 @@ function cmdReport(argv: string[]) {
 }
 
 function cmdLeaderboard(argv: string[]) {
-  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { o: { type: "string" }, title: { type: "string" } } });
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: { o: { type: "string" }, title: { type: "string" } },
+  });
   if (!positionals.length) throw new Error("usage: drainbench leaderboard <results.json...> [-o out.html]");
   const runs = positionals.map((f) => JSON.parse(readFileSync(f, "utf8")) as RunResult);
   const out = values.o ?? "site/index.html";
@@ -151,7 +173,8 @@ function cmdValidate(argv: string[]) {
 
 function cmdList(argv: string[]) {
   const { values } = parseArgs({ args: argv, options: { scenarios: { type: "string" } } });
-  for (const s of loadCorpus(values.scenarios ?? DEFAULT_CORPUS).scenarios) console.log(`${s.id.padEnd(16)} ${s.kind.padEnd(7)} ${s.title}`);
+  for (const s of loadCorpus(values.scenarios ?? DEFAULT_CORPUS).scenarios)
+    console.log(`${s.id.padEnd(16)} ${s.kind.padEnd(7)} ${s.title}`);
 }
 
 async function main() {

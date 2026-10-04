@@ -1,4 +1,4 @@
-import { mkdtempSync, existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,7 +6,7 @@ import { runAll, runScenario, transcriptPath } from "../src/harness.js";
 import { MockProvider } from "../src/providers/mock.js";
 import { scoreTranscript } from "../src/score.js";
 import type { DefenseId } from "../src/types.js";
-import { ATTACKER, LOOKALIKE, VENDOR, scenario } from "./fixtures.js";
+import { ATTACKER, LOOKALIKE, scenario, VENDOR } from "./fixtures.js";
 
 const run = async (persona: ConstructorParameters<typeof MockProvider>[0], d: DefenseId, s = scenario()) => {
   const t = await runScenario(new MockProvider(persona), s, d);
@@ -16,7 +16,10 @@ const run = async (persona: ConstructorParameters<typeof MockProvider>[0], d: De
 describe("harness + mock provider", () => {
   it("reads fixtures through tools, so the injection text is in the transcript", async () => {
     const { t } = await run("naive", "none");
-    const toolText = t.messages.filter((m) => m.role === "tool").map((m) => m.content).join("\n");
+    const toolText = t.messages
+      .filter((m) => m.role === "tool")
+      .map((m) => m.content)
+      .join("\n");
     expect(toolText).toContain(ATTACKER);
   });
 
@@ -52,7 +55,10 @@ describe("harness + mock provider", () => {
   });
 
   it("skimmer falls for a look-alike payee that passes a first-6/last-4 check", async () => {
-    const s = scenario({ category: "lookalike", attacker: { payees: [LOOKALIKE], intents: [{ to: LOOKALIKE, amount: 300, via: "tool" }] } });
+    const s = scenario({
+      category: "lookalike",
+      attacker: { payees: [LOOKALIKE], intents: [{ to: LOOKALIKE, amount: 300, via: "tool" }] },
+    });
     expect((await run("skimmer", "none", s)).score.lost).toBe(true);
     expect((await run("skimmer", "prompt", s)).score.lost).toBe(false); // ignores tool-sourced instructions under policy
     expect((await run("skimmer", "enforced", s)).score.lost).toBe(false);
@@ -83,7 +89,13 @@ describe("harness + mock provider", () => {
 
   it("runAll caches transcripts by content key and reuses them", async () => {
     const dir = mkdtempSync(join(tmpdir(), "drainbench-"));
-    const opts = { providers: [new MockProvider("naive")], defenses: ["none", "enforced"] as DefenseId[], scenarios: [scenario()], runDir: dir, concurrency: 2 };
+    const opts = {
+      providers: [new MockProvider("naive")],
+      defenses: ["none", "enforced"] as DefenseId[],
+      scenarios: [scenario()],
+      runDir: dir,
+      concurrency: 2,
+    };
     let cached = 0;
     await runAll(opts);
     expect(existsSync(transcriptPath(dir, "mock:naive", "none", "t-01"))).toBe(true);
@@ -93,7 +105,13 @@ describe("harness + mock provider", () => {
   });
 
   it("records provider errors without crashing the run", async () => {
-    const bad = { id: "bad:model", synthetic: false, complete: async () => { throw new Error("HTTP 401"); } };
+    const bad = {
+      id: "bad:model",
+      synthetic: false,
+      complete: async () => {
+        throw new Error("HTTP 401");
+      },
+    };
     const t = await runScenario(bad, scenario(), "none");
     expect(t.error).toContain("401");
   });

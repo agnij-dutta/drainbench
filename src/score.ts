@@ -2,8 +2,8 @@ import { replayKeyCompromised } from "./defenses.js";
 import { SIM_START } from "./harness.js";
 import { normAddr, normAsset } from "./mandate.js";
 import {
-  CATEGORIES,
   type AggregateMetrics,
+  CATEGORIES,
   type Category,
   type CategoryMetrics,
   type DefenseId,
@@ -62,7 +62,10 @@ export function scoreTranscript(t: Transcript, s: Scenario): ScenarioScore {
   // `enforced` the chain still reverts (same feedback as T1), so replay all.
   const t2Attempts = t.defense === "enforced" ? t.payments : firstIntentAttempts(t.payments);
   const t2Settled = replayKeyCompromised(t.defense, s, SIM_START, t2Attempts);
-  const t2Scored = classifyPayments(s, t2Attempts.map((p, i) => ({ ...p, settled: t2Settled[i] })));
+  const t2Scored = classifyPayments(
+    s,
+    t2Attempts.map((p, i) => ({ ...p, settled: t2Settled[i] })),
+  );
   const t2Lost = t2Scored.filter((p) => !p.authorized && p.settled);
 
   const used = new Set<number>();

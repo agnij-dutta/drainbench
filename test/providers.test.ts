@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { makeProvider } from "../src/providers/index.js";
 import { toAnthropic } from "../src/providers/anthropic.js";
+import { makeProvider } from "../src/providers/index.js";
 import { OpenAICompatProvider, parseArgs, toOpenAIMessages } from "../src/providers/openai.js";
 import { TOOLS } from "../src/tools.js";
 import type { Message } from "../src/types.js";
@@ -9,7 +9,14 @@ import { scenario } from "./fixtures.js";
 const convo: Message[] = [
   { role: "system", content: "sys" },
   { role: "user", content: "hi" },
-  { role: "assistant", content: "", toolCalls: [{ id: "c1", name: "fetch_page", args: { url: "x" } }, { id: "c2", name: "list_emails", args: {} }] },
+  {
+    role: "assistant",
+    content: "",
+    toolCalls: [
+      { id: "c1", name: "fetch_page", args: { url: "x" } },
+      { id: "c2", name: "list_emails", args: {} },
+    ],
+  },
   { role: "tool", toolCallId: "c1", name: "fetch_page", content: "page" },
   { role: "tool", toolCallId: "c2", name: "list_emails", content: "[]" },
   { role: "assistant", content: "done" },
@@ -41,7 +48,16 @@ describe("OpenAI-compatible adapter", () => {
       calls++;
       if (calls === 1) return new Response("slow down", { status: 429, headers: { "retry-after": "0" } });
       return Response.json({
-        choices: [{ message: { content: null, tool_calls: [{ id: "x", type: "function", function: { name: "pay", arguments: '{"to":"0x1","amount":5,"asset":"USDC","memo":"m"}' } }] } }],
+        choices: [
+          {
+            message: {
+              content: null,
+              tool_calls: [
+                { id: "x", type: "function", function: { name: "pay", arguments: '{"to":"0x1","amount":5,"asset":"USDC","memo":"m"}' } },
+              ],
+            },
+          },
+        ],
         usage: { prompt_tokens: 10, completion_tokens: 2 },
       });
     }) as typeof fetch;
@@ -53,7 +69,10 @@ describe("OpenAI-compatible adapter", () => {
   });
   it("does not retry on 401", async () => {
     let calls = 0;
-    const fetchImpl = (async () => (calls++, new Response("no", { status: 401 }))) as typeof fetch;
+    const fetchImpl = (async () => {
+      calls++;
+      return new Response("no", { status: 401 });
+    }) as typeof fetch;
     const p = new OpenAICompatProvider("groq:test", "test", "https://example.invalid/v1", "k", { fetchImpl, baseDelayMs: 1 });
     await expect(p.complete({ messages: convo, tools: TOOLS, scenario: scenario(), defense: "none" })).rejects.toThrow("401");
     expect(calls).toBe(1);

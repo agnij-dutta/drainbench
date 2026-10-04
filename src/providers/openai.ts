@@ -2,7 +2,7 @@
 // Together, and any self-hosted endpoint speaking the same wire format.
 import type { Message, ToolCall } from "../types.js";
 import { postJson, type RetryOptions } from "./http.js";
-import { ProviderError, type CompletionRequest, type CompletionResponse, type Provider } from "./types.js";
+import { type CompletionRequest, type CompletionResponse, type Provider, ProviderError } from "./types.js";
 
 export const OPENAI_COMPAT_PRESETS: Record<string, { baseUrl: string; keyEnv: string }> = {
   openai: { baseUrl: "https://api.openai.com/v1", keyEnv: "OPENAI_API_KEY" },
@@ -13,30 +13,43 @@ export const OPENAI_COMPAT_PRESETS: Record<string, { baseUrl: string; keyEnv: st
   compat: { baseUrl: process.env.DRAINBENCH_COMPAT_BASE_URL ?? "http://localhost:11434/v1", keyEnv: "DRAINBENCH_COMPAT_API_KEY" },
 };
 
-interface OAIToolCall { id: string; type: "function"; function: { name: string; arguments: string } }
+interface OAIToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
 interface OAIResponse {
   choices: { message: { content: string | null; tool_calls?: OAIToolCall[] } }[];
   usage?: { prompt_tokens: number; completion_tokens: number };
 }
 
+/** Convert internal messages to the Chat Completions wire format. */
 export function toOpenAIMessages(messages: Message[]): unknown[] {
-  return messages.map((m) => {
-    switch (m.role) {
-      case "system":
-      case "user":
-        return { role: m.role, content: m.content };
-      case "assistant":
-        return {
-          role: "assistant",
-          content: m.content || null,
-          ...(m.toolCalls?.length
-            ? { tool_calls: m.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } })) }
-            : {}),
-        };
-      case "tool":
-        return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
-    }
-  });
+  return messages.map(toOpenAIMessage);
+}
+
+function toOpenAIMessage(m: Message): unknown {
+  switch (m.role) {
+    case "system":
+    case "user":
+      return { role: m.role, content: m.content };
+    case "assistant":
+      return {
+        role: "assistant",
+        content: m.content || null,
+        ...(m.toolCalls?.length
+          ? {
+              tool_calls: m.toolCalls.map((c) => ({
+                id: c.id,
+                type: "function",
+                function: { name: c.name, arguments: JSON.stringify(c.args) },
+              })),
+            }
+          : {}),
+      };
+    case "tool":
+      return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
+  }
 }
 
 export function parseArgs(raw: string | undefined): Record<string, unknown> {
@@ -76,7 +89,11 @@ export class OpenAICompatProvider implements Provider {
     const res = await postJson<OAIResponse>(`${this.baseUrl.replace(/\/$/, "")}/chat/completions`, headers, body, this.retry);
     const msg = res.choices?.[0]?.message;
     if (!msg) throw new ProviderError(`empty response: ${JSON.stringify(res).slice(0, 300)}`);
-    const toolCalls: ToolCall[] = (msg.tool_calls ?? []).map((c) => ({ id: c.id, name: c.function.name, args: parseArgs(c.function.arguments) }));
+    const toolCalls: ToolCall[] = (msg.tool_calls ?? []).map((c) => ({
+      id: c.id,
+      name: c.function.name,
+      args: parseArgs(c.function.arguments),
+    }));
     return {
       content: msg.content ?? "",
       toolCalls,

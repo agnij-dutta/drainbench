@@ -1,5 +1,5 @@
-import type { DefenseId, Message, Scenario, ToolCall } from "../types.js";
 import type { ToolSpec } from "../tools.js";
+import type { DefenseId, Message, Scenario, ToolCall } from "../types.js";
 
 export interface CompletionRequest {
   messages: Message[];
@@ -25,7 +25,11 @@ export interface Provider {
 }
 
 export class ProviderError extends Error {
-  constructor(message: string, readonly status?: number, readonly retryable = false) {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly retryable = false,
+  ) {
     super(message);
   }
 }

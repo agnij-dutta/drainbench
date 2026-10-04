@@ -1,10 +1,10 @@
 import { AnthropicProvider } from "./anthropic.js";
-import { MOCK_PERSONAS, MockProvider, type MockPersona } from "./mock.js";
+import { MOCK_PERSONAS, type MockPersona, MockProvider } from "./mock.js";
 import { OPENAI_COMPAT_PRESETS, OpenAICompatProvider } from "./openai.js";
 import type { Provider } from "./types.js";
 
+export { MOCK_PERSONAS, MockProvider } from "./mock.js";
 export * from "./types.js";
-export { MockProvider, MOCK_PERSONAS } from "./mock.js";
 
 /**
  * Model spec: `<provider>:<model>`.
@@ -32,6 +32,6 @@ export function makeProvider(spec: string, env: NodeJS.ProcessEnv = process.env)
   if (!preset) throw new Error(`unknown provider "${provider}"`);
   const key = env[preset.keyEnv] ?? (provider === "compat" ? "none" : undefined);
   if (!key) throw new Error(`${preset.keyEnv} is not set`);
-  const baseUrl = provider === "compat" ? env.DRAINBENCH_COMPAT_BASE_URL ?? preset.baseUrl : preset.baseUrl;
+  const baseUrl = provider === "compat" ? (env.DRAINBENCH_COMPAT_BASE_URL ?? preset.baseUrl) : preset.baseUrl;
   return new OpenAICompatProvider(spec, model, baseUrl, key);
 }

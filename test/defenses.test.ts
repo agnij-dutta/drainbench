@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeRail, policyPrompt, replayKeyCompromised } from "../src/defenses.js";
-import { ATTACKER, VENDOR, scenario } from "./fixtures.js";
+import { ATTACKER, scenario, VENDOR } from "./fixtures.js";
 
 const s = scenario();
 const attempts = [
@@ -39,7 +39,13 @@ describe("defense layers under T1 (brain compromised, signer intact)", () => {
   it("(d) enforced matches the gate under T1", () => {
     const g = makeRail("gate", s, 0);
     const e = makeRail("enforced", s, 0);
-    for (const [to, amt] of [[VENDOR, 200], [ATTACKER, 50], [VENDOR, 600], [VENDOR, 500], [VENDOR, 400]] as const) {
+    for (const [to, amt] of [
+      [VENDOR, 200],
+      [ATTACKER, 50],
+      [VENDOR, 600],
+      [VENDOR, 500],
+      [VENDOR, 400],
+    ] as const) {
       const a = g.pay(to, amt, "USDC", 0);
       const b = e.pay(to, amt, "USDC", 0);
       expect([b.settled, b.reason]).toEqual([a.settled, a.reason]);

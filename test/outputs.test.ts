@@ -14,7 +14,18 @@ async function mockRun(): Promise<RunResult> {
   const byId = new Map(scenarios.map((s) => [s.id, s]));
   const scores = ts.map((t) => scoreTranscript(t, byId.get(t.scenarioId)!));
   const models = providers.map((p) => p.id);
-  return { runId: "t", createdAt: "", harnessVersion: "x", corpusVersion: "c", scenarioCount: 2, models, defenses: [...DEFENSES], synthetic: true, results: summarize(scores, scenarios, models, [...DEFENSES]), scores };
+  return {
+    runId: "t",
+    createdAt: "",
+    harnessVersion: "x",
+    corpusVersion: "c",
+    scenarioCount: 2,
+    models,
+    defenses: [...DEFENSES],
+    synthetic: true,
+    results: summarize(scores, scenarios, models, [...DEFENSES]),
+    scores,
+  };
 }
 
 describe("outputs", () => {

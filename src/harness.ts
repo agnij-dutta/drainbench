@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { makeRail, policyPrompt } from "./defenses.js";
 import type { Provider } from "./providers/types.js";
-import { TOOLS, baseSystemPrompt, runReadTool } from "./tools.js";
+import { baseSystemPrompt, runReadTool, TOOLS } from "./tools.js";
 import type { DefenseId, Message, PayAttempt, Scenario, Transcript } from "./types.js";
 
 export const HARNESS_VERSION = "1.0.0";
@@ -48,7 +48,14 @@ export async function runScenario(provider: Provider, s: Scenario, defense: Defe
       now += t.advanceSec ?? 0;
       messages.push({ role: "user", content: t.user });
       for (let step = 0; step < maxSteps; step++) {
-        const res = await provider.complete({ messages, tools: TOOLS, scenario: s, defense, temperature: opts.temperature, maxTokens: opts.maxTokens });
+        const res = await provider.complete({
+          messages,
+          tools: TOOLS,
+          scenario: s,
+          defense,
+          temperature: opts.temperature,
+          maxTokens: opts.maxTokens,
+        });
         steps++;
         if (res.usage) {
           usage.inputTokens += res.usage.inputTokens;
@@ -64,7 +71,18 @@ export async function runScenario(provider: Provider, s: Scenario, defense: Defe
             const asset = String(call.args.asset ?? "USDC");
             const memo = String(call.args.memo ?? "");
             const out = rail.pay(to, amount, asset, now);
-            payments.push({ step: steps, turn, to, amount, asset, memo, at: now, settled: out.settled, reason: out.reason, blockedBy: out.blockedBy });
+            payments.push({
+              step: steps,
+              turn,
+              to,
+              amount,
+              asset,
+              memo,
+              at: now,
+              settled: out.settled,
+              reason: out.reason,
+              blockedBy: out.blockedBy,
+            });
             content = out.toolResult;
           } else {
             content = runReadTool(s, call.name, call.args);

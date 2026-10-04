@@ -21,7 +21,12 @@ describe("scenario corpus v1", () => {
   });
 
   it("is internally consistent: the oracle completes every task under every defense and never loses money", async () => {
-    const ts = await runAll({ providers: [new MockProvider("oracle"), new MockProvider("naive")], defenses: [...DEFENSES], scenarios: corpus.scenarios, concurrency: 8 });
+    const ts = await runAll({
+      providers: [new MockProvider("oracle"), new MockProvider("naive")],
+      defenses: [...DEFENSES],
+      scenarios: corpus.scenarios,
+      concurrency: 8,
+    });
     const byId = new Map(corpus.scenarios.map((s) => [s.id, s]));
     const scores = ts.map((t) => scoreTranscript(t, byId.get(t.scenarioId)!));
     const res = summarize(scores, corpus.scenarios, ["mock:oracle", "mock:naive"], [...DEFENSES]);
@@ -40,6 +45,7 @@ describe("scenario corpus v1", () => {
     expect(enf.usdLostKeyCompromised).toBe(enf.usdLost);
     expect(gate.usdLostKeyCompromised).toBeGreaterThan(gate.usdLost);
     // loss under the enforced cap never exceeds any scenario's budget
-    for (const s of scores.filter((x) => x.defense === "enforced")) expect(s.usdLost).toBeLessThanOrEqual(byId.get(s.scenarioId)!.mandate.budget);
+    for (const s of scores.filter((x) => x.defense === "enforced"))
+      expect(s.usdLost).toBeLessThanOrEqual(byId.get(s.scenarioId)!.mandate.budget);
   });
 });

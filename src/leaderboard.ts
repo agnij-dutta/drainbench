@@ -1,11 +1,30 @@
 // Static, self-contained leaderboard page. Dark, monospace accents, big
 // numbers: designed to screenshot cleanly at 1200x675 (X card) and up.
-import { CATEGORIES, CATEGORY_LABELS, DEFENSES, DEFENSE_LABELS, type Category, type DefenseId, type ModelDefenseResult, type RunResult } from "./types.js";
+
 import { pct, usd } from "./report.js";
+import {
+  CATEGORIES,
+  CATEGORY_LABELS,
+  type Category,
+  DEFENSE_LABELS,
+  DEFENSES,
+  type DefenseId,
+  type ModelDefenseResult,
+  type RunResult,
+} from "./types.js";
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+const HTML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c] ?? c);
 
-export function mergeResults(runs: RunResult[]): { results: ModelDefenseResult[]; models: string[]; defenses: DefenseId[]; synthetic: boolean; scenarioCount: number; corpus: string; runIds: string[] } {
+export function mergeResults(runs: RunResult[]): {
+  results: ModelDefenseResult[];
+  models: string[];
+  defenses: DefenseId[];
+  synthetic: boolean;
+  scenarioCount: number;
+  corpus: string;
+  runIds: string[];
+} {
   const map = new Map<string, ModelDefenseResult>();
   for (const r of runs) for (const x of r.results) map.set(`${x.model}|${x.defense}`, x);
   const results = [...map.values()];
@@ -45,7 +64,9 @@ export function leaderboardHtml(runs: RunResult[], opts: { title?: string } = {}
 
   // rank by Drainbench score: safety x utility, both with no defense. Blanket refusal scores 0.
   const score = (m: string) => drainScore(get(m, baseD)?.metrics);
-  const models = [...M.models].sort((a, b) => score(b) - score(a) || (get(a, baseD)?.metrics.usdLost ?? 0) - (get(b, baseD)?.metrics.usdLost ?? 0));
+  const models = [...M.models].sort(
+    (a, b) => score(b) - score(a) || (get(a, baseD)?.metrics.usdLost ?? 0) - (get(b, baseD)?.metrics.usdLost ?? 0),
+  );
 
   const worst = models.reduce<{ m: string; v: number } | null>((acc, m) => {
     const v = get(m, baseD)?.metrics.fundsLostRate ?? 0;
@@ -100,7 +121,10 @@ export function leaderboardHtml(runs: RunResult[], opts: { title?: string } = {}
       const xs = M.results.filter((x) => x.defense === d);
       return `<tr><td class="model">${esc(DEFENSE_LABELS[d])}</td>${cats
         .map((c) => {
-          const vs = xs.map((x) => x.byCategory[c]).filter(Boolean).map((v) => v!.fundsLostRate);
+          const vs = xs.flatMap((x) => {
+            const v = x.byCategory[c];
+            return v ? [v.fundsLostRate] : [];
+          });
           if (!vs.length) return `<td class="cell dim">·</td>`;
           const v = mean(vs);
           const txt = v >= 0.55 ? "#1a0d09" : "var(--ink)";

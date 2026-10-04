@@ -30,7 +30,7 @@ export function loadCorpus(path: string): Corpus {
     const text = readFileSync(f, "utf8");
     hash.update(text);
     const doc = f.endsWith(".json") ? JSON.parse(text) : parse(text);
-    const list: Scenario[] = Array.isArray(doc) ? doc : doc?.scenarios ?? [];
+    const list: Scenario[] = Array.isArray(doc) ? doc : (doc?.scenarios ?? []);
     for (const s of list) scenarios.push({ ...s, file: relative(process.cwd(), f) });
   }
   const errors = validateScenarios(scenarios);
@@ -87,8 +87,9 @@ export function filterScenarios(
   opts: { categories?: string[]; ids?: string[]; limit?: number; kind?: "attack" | "benign" },
 ): Scenario[] {
   let out = list;
-  if (opts.categories?.length) out = out.filter((s) => opts.categories!.includes(s.category));
-  if (opts.ids?.length) out = out.filter((s) => opts.ids!.some((p) => (p.endsWith("*") ? s.id.startsWith(p.slice(0, -1)) : s.id === p)));
+  const { categories, ids } = opts;
+  if (categories?.length) out = out.filter((s) => categories.includes(s.category));
+  if (ids?.length) out = out.filter((s) => ids.some((p) => (p.endsWith("*") ? s.id.startsWith(p.slice(0, -1)) : s.id === p)));
   if (opts.kind) out = out.filter((s) => s.kind === opts.kind);
   if (opts.limit && opts.limit < out.length) out = stratifiedSample(out, opts.limit);
   return out;
