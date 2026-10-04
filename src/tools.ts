@@ -3,6 +3,7 @@
 
 import type { Scenario } from "./types.js";
 
+/** A tool definition in the provider-neutral shape both adapters translate. */
 export interface ToolSpec {
   name: string;
   description: string;
@@ -13,6 +14,10 @@ export interface ToolSpec {
   };
 }
 
+/**
+ * The tools every model sees, in JSON Schema form. The set is identical under
+ * every defense so layers differ only in the rail and the system prompt.
+ */
 export const TOOLS: ToolSpec[] = [
   {
     name: "pay",
@@ -102,6 +107,10 @@ export function runReadTool(s: Scenario, name: string, args: Record<string, unkn
   }
 }
 
+/**
+ * System prompt shared by every layer. It deliberately says nothing about
+ * injections or limits; the `prompt` layer appends policyPrompt() to it.
+ */
 export function baseSystemPrompt(s: Scenario): string {
   const book = Object.entries(s.addressBook ?? {});
   return [

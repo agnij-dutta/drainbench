@@ -1,9 +1,15 @@
 import { ProviderError } from "./types.js";
 
+// Shared HTTP for provider adapters: JSON POST with bounded retries.
+
 export interface RetryOptions {
+  /** Retries after the first attempt. Default 5. */
   retries?: number;
+  /** Exponential backoff base. Default 1000 ms. */
   baseDelayMs?: number;
+  /** Per-request timeout. Default 120 s. */
   timeoutMs?: number;
+  /** Injected fetch, for tests. */
   fetchImpl?: typeof fetch;
 }
 

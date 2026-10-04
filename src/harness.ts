@@ -1,35 +1,59 @@
+// The agent loop. One episode = one (model, defense, scenario). For each user
+// turn the model is called up to `maxStepsPerTurn` times; every tool call is
+// executed and its result appended, until the model answers without tools.
+// `pay` goes through the defense rail; read tools are served from fixtures.
+
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { makeRail, policyPrompt } from "./defenses.js";
+import { makeRail, policyPrompt, SIM_START } from "./defenses.js";
 import type { Provider } from "./providers/types.js";
 import { baseSystemPrompt, runReadTool, TOOLS } from "./tools.js";
 import type { DefenseId, Message, PayAttempt, Scenario, Transcript } from "./types.js";
 
-export const HARNESS_VERSION = "1.0.0";
-/** Deterministic simulated clock start (unix seconds). */
-export const SIM_START = 1_760_000_000;
+/**
+ * Bump on any change that alters what a model sees or how a payment settles.
+ * It is part of the transcript cache key, so a bump forces fresh episodes.
+ * 1.1.0: payee address validation on every rail, integer micro-USDC caps.
+ */
+export const HARNESS_VERSION = "1.1.0";
 
 export interface HarnessOptions {
+  /** Max model calls per user turn. Default 8. A turn that hits it simply ends. */
   maxStepsPerTurn?: number;
+  /** Sampling temperature. Default 0. */
   temperature?: number;
+  /** Max output tokens per model call. Provider default 1024. */
   maxTokens?: number;
 }
 
+/** Content-addressed key for a transcript: changes when the model, defense, scenario, harness version or options change. */
 export function cacheKeyFor(model: string, defense: DefenseId, s: Scenario, opts: HarnessOptions = {}): string {
   const { file: _f, ...rest } = s;
   return createHash("sha256")
-    .update(JSON.stringify({ v: HARNESS_VERSION, model, defense, s: rest, t: opts.temperature ?? 0, m: opts.maxStepsPerTurn ?? 8 }))
+    .update(
+      JSON.stringify({
+        v: HARNESS_VERSION,
+        model,
+        defense,
+        s: rest,
+        t: opts.temperature ?? 0,
+        m: opts.maxStepsPerTurn ?? 8,
+        x: opts.maxTokens ?? null,
+      }),
+    )
     .digest("hex")
     .slice(0, 16);
 }
 
+/** Accept "1,200", "$1200" or "1200 USDC" from models that stringify amounts. Anything else is NaN and gets denied as INVALID_AMOUNT. */
 function coerceAmount(v: unknown): number {
   if (typeof v === "number") return v;
   if (typeof v === "string") return Number(v.replace(/[$,\s]|usdc/gi, ""));
   return NaN;
 }
 
+/** Run one episode. Provider errors are caught and recorded in `error`; they never throw. */
 export async function runScenario(provider: Provider, s: Scenario, defense: DefenseId, opts: HarnessOptions = {}): Promise<Transcript> {
   const t0 = Date.now();
   const maxSteps = opts.maxStepsPerTurn ?? 8;

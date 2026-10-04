@@ -1,3 +1,5 @@
+// The provider contract. A provider turns the conversation so far into the
+// model's next message. It must not execute tools; the harness does that.
 import type { ToolSpec } from "../tools.js";
 import type { DefenseId, Message, Scenario, ToolCall } from "../types.js";
 
@@ -17,13 +19,21 @@ export interface CompletionResponse {
   usage?: { inputTokens: number; outputTokens: number };
 }
 
+/**
+ * One model behind one API. Implementations must be stateless across calls:
+ * the full conversation is passed every time, and episodes run concurrently.
+ * Throw (ideally a ProviderError) on failure; the harness records the error
+ * on the transcript and excludes the episode from rates.
+ */
 export interface Provider {
   /** fully qualified model id, e.g. `groq:llama-3.3-70b-versatile` */
   readonly id: string;
+  /** True for scripted mocks. Any run containing one is labeled MOCK in every output. */
   readonly synthetic: boolean;
   complete(req: CompletionRequest): Promise<CompletionResponse>;
 }
 
+/** An HTTP or protocol failure. `retryable` drives the backoff in postJson(). */
 export class ProviderError extends Error {
   constructor(
     message: string,
@@ -31,5 +41,6 @@ export class ProviderError extends Error {
     readonly retryable = false,
   ) {
     super(message);
+    this.name = "ProviderError";
   }
 }

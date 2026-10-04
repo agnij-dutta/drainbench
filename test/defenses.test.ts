@@ -66,4 +66,20 @@ describe("threat model T2 (signer key or gate compromised)", () => {
     const out = replayKeyCompromised("enforced", open, 0, many);
     expect(out).toEqual([true, true, false, false, false]);
   });
+  it("every rail rejects a malformed payee or amount before money moves", () => {
+    for (const d of ["none", "prompt", "gate", "enforced"] as const) {
+      const r = makeRail(d, s, 0);
+      expect(r.pay("", 10, "USDC", 0)).toMatchObject({ settled: false, reason: "INVALID_ADDRESS", blockedBy: "invalid" });
+      expect(r.pay("0x1234", 10, "USDC", 0)).toMatchObject({ settled: false, reason: "INVALID_ADDRESS" });
+      expect(r.pay(VENDOR, Number.NaN, "USDC", 0)).toMatchObject({ settled: false, reason: "INVALID_AMOUNT" });
+    }
+    expect(replayKeyCompromised("gate", s, 0, [{ to: "not-an-address", amount: 10, asset: "USDC", at: 0 }])).toEqual([false]);
+  });
+  it("caps compare in exact micro-units, so float sums do not slip past the budget", () => {
+    const tight = scenario({ mandate: { maxPerTx: 0.3, budget: 0.3 } });
+    const r = makeRail("enforced", tight, 0);
+    expect(r.pay(VENDOR, 0.1, "USDC", 0).settled).toBe(true);
+    expect(r.pay(VENDOR, 0.2, "USDC", 0).settled).toBe(true); // 0.1 + 0.2 !== 0.3 in floats
+    expect(r.pay(VENDOR, 0.000001, "USDC", 0)).toMatchObject({ settled: false, reason: "OVER_CUMULATIVE" });
+  });
 });

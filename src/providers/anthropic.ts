@@ -38,6 +38,7 @@ export function toAnthropic(messages: Message[]): { system: string; messages: { 
   return { system, messages: out };
 }
 
+/** Anthropic Messages API adapter with tool use. Temperature defaults to 0. */
 export class AnthropicProvider implements Provider {
   readonly synthetic = false;
   constructor(

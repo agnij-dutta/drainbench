@@ -14,6 +14,9 @@
 //            output and checks the stated amount limits.
 //   refuser  never pays anything. Zero loss, zero utility.
 //   oracle   pays exactly the expected legitimate payments.
+//
+// The mocks read `req.scenario`, which no real provider ever sees. That is
+// why their numbers are bounds on the defenses, not measurements of a model.
 
 import { normAddr } from "../mandate.js";
 import type { Message, Scenario, ToolCall } from "../types.js";
@@ -37,6 +40,7 @@ const shallow = (a: string) => {
   return `${h.slice(0, 6)}..${h.slice(-4)}`;
 };
 
+/** A scripted persona. `synthetic` is true, so every output labels its rows MOCK. */
 export class MockProvider implements Provider {
   readonly synthetic = true;
   readonly id: string;

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
+// The drainbench CLI. Run `drainbench help` for usage; README "Usage" documents every flag.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { HARNESS_VERSION, runAll } from "./harness.js";
 import { leaderboardHtml } from "./leaderboard.js";
-import { makeProvider } from "./providers/index.js";
-import { markdownReport, pct, usd } from "./report.js";
+import { makeProvider, PROVIDERS } from "./providers/index.js";
+import { markdownReport, modelLabel, pct, usd } from "./report.js";
 import { filterScenarios, loadCorpus } from "./scenarios.js";
 import { scoreTranscript, summarize } from "./score.js";
 import { CATEGORY_LABELS, DEFENSE_LABELS, DEFENSES, type DefenseId, type RunResult } from "./types.js";
@@ -25,7 +26,7 @@ Usage:
 
 run options:
   --models     comma list of <provider>:<model>   (default: mock:naive,mock:skimmer,mock:refuser,mock:oracle)
-               providers: mock, groq, openrouter, openai, together, compat, anthropic
+               providers: ${Object.keys(PROVIDERS).join(", ")}
   --defenses   comma list of ${DEFENSES.join(",")} (default: all)
   --scenarios  corpus dir or file (default: scenarios/v1)
   --category   comma list of categories to include
@@ -33,9 +34,28 @@ run options:
   --limit      stratified sample of N scenarios across categories
   --concurrency N parallel episodes (default 4)
   --max-steps  max model calls per user turn (default 8)
+  --temperature sampling temperature (default 0)
+  --max-tokens max output tokens per model call (default 1024)
   --run-id     id for runs/<run-id>/ and results/<run-id>.* (reruns reuse cached transcripts)
   --out        results dir (default results)
+  --note       free-text provenance stored in the results file (machine, date, settings)
+  --quiet      no per-episode progress lines
+
+leaderboard options:
+  -o           output file (default site/index.html)
+  --title      page title (default Drainbench)
+
+Model keys are read from the environment only (see .env.example).
 `;
+
+/** Parse a numeric flag, failing loudly instead of silently falling back. */
+function num(name: string, v: string | undefined, opts: { min: number; int?: boolean }): number | undefined {
+  if (v === undefined) return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < opts.min || (opts.int && !Number.isInteger(n)))
+    throw new Error(`--${name} must be ${opts.int ? "an integer" : "a number"} >= ${opts.min}, got "${v}"`);
+  return n;
+}
 
 function list(v: string | undefined): string[] | undefined {
   return v
@@ -58,8 +78,11 @@ async function cmdRun(argv: string[]) {
       limit: { type: "string" },
       concurrency: { type: "string" },
       "max-steps": { type: "string" },
+      temperature: { type: "string" },
+      "max-tokens": { type: "string" },
       "run-id": { type: "string" },
       out: { type: "string" },
+      note: { type: "string" },
       quiet: { type: "boolean" },
     },
   });
@@ -67,13 +90,18 @@ async function cmdRun(argv: string[]) {
   const scenarios = filterScenarios(corpus.scenarios, {
     categories: list(values.category),
     ids: list(values.ids),
-    limit: values.limit ? Number(values.limit) : undefined,
+    limit: num("limit", values.limit, { min: 1, int: true }),
   });
   if (!scenarios.length) throw new Error("no scenarios selected");
   const providers = (list(values.models) ?? ["mock:naive", "mock:skimmer", "mock:refuser", "mock:oracle"]).map((m) => makeProvider(m));
   const defenses = (list(values.defenses) ?? [...DEFENSES]) as DefenseId[];
   for (const d of defenses) if (!DEFENSES.includes(d)) throw new Error(`unknown defense ${d}`);
+  const concurrency = num("concurrency", values.concurrency, { min: 1, int: true }) ?? 4;
+  const maxStepsPerTurn = num("max-steps", values["max-steps"], { min: 1, int: true }) ?? 8;
+  const temperature = num("temperature", values.temperature, { min: 0 });
+  const maxTokens = num("max-tokens", values["max-tokens"], { min: 1, int: true });
   const runId = values["run-id"] ?? new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  if (!/^[A-Za-z0-9._-]+$/.test(runId)) throw new Error(`--run-id may only contain letters, digits, . _ -, got "${runId}"`);
   const runDir = join("runs", runId);
   const outDir = values.out ?? "results";
   mkdirSync(runDir, { recursive: true });
@@ -88,8 +116,10 @@ async function cmdRun(argv: string[]) {
     providers,
     defenses,
     scenarios,
-    concurrency: values.concurrency ? Number(values.concurrency) : 4,
-    maxStepsPerTurn: values["max-steps"] ? Number(values["max-steps"]) : 8,
+    concurrency,
+    maxStepsPerTurn,
+    temperature,
+    maxTokens,
     runDir,
     onProgress: (done, n, t, cached) => {
       if (cached) cachedN++;
@@ -118,6 +148,8 @@ async function cmdRun(argv: string[]) {
     models,
     defenses,
     synthetic: providers.every((p) => p.synthetic),
+    environment: { node: process.versions.node, platform: process.platform, arch: process.arch },
+    ...(values.note ? { note: values.note } : {}),
     results: summarize(scores, scenarios, models, defenses),
     scores,
   };
@@ -136,27 +168,41 @@ async function cmdRun(argv: string[]) {
   for (const x of result.results) {
     const m = x.metrics;
     console.log(
-      `${x.model.padEnd(36)} ${DEFENSE_LABELS[x.defense].padEnd(24)} ${pct(m.attackSuccessRate).padStart(9)} ${pct(m.fundsLostRate).padStart(6)} ${usd(m.usdLost).padStart(9)} ${usd(m.usdLostKeyCompromised).padStart(10)} ${pct(m.benignSuccessRate).padStart(7)} ${m.errors}`,
+      `${modelLabel(x.model).padEnd(36)} ${DEFENSE_LABELS[x.defense].padEnd(24)} ${pct(m.attackSuccessRate).padStart(9)} ${pct(m.fundsLostRate).padStart(6)} ${usd(m.usdLost).padStart(9)} ${usd(m.usdLostKeyCompromised).padStart(10)} ${pct(m.benignSuccessRate).padStart(7)} ${m.errors}`,
     );
   }
   console.log(`\nwrote ${jsonPath}, ${mdPath} · transcripts in ${runDir}/transcripts (${cachedN} cached)`);
 }
 
+/** Read a results file, failing with the file name rather than a bare JSON or property error. */
+function loadResults(file: string): RunResult {
+  if (!existsSync(file)) throw new Error(`results file not found: ${file}`);
+  let r: RunResult;
+  try {
+    r = JSON.parse(readFileSync(file, "utf8")) as RunResult;
+  } catch (e) {
+    throw new Error(`${file} is not valid JSON: ${e instanceof Error ? e.message : e}`);
+  }
+  if (!r || !Array.isArray(r.results) || !Array.isArray(r.scores) || !Array.isArray(r.models))
+    throw new Error(`${file} does not look like a drainbench results file (expected results, scores, models)`);
+  return r;
+}
+
 function cmdReport(argv: string[]) {
   const [file] = argv;
   if (!file) throw new Error("usage: drainbench report <results.json>");
-  console.log(markdownReport(JSON.parse(readFileSync(file, "utf8"))));
+  console.log(markdownReport(loadResults(file)));
 }
 
 function cmdLeaderboard(argv: string[]) {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { o: { type: "string" }, title: { type: "string" } },
+    options: { out: { type: "string", short: "o" }, title: { type: "string" } },
   });
   if (!positionals.length) throw new Error("usage: drainbench leaderboard <results.json...> [-o out.html]");
-  const runs = positionals.map((f) => JSON.parse(readFileSync(f, "utf8")) as RunResult);
-  const out = values.o ?? "site/index.html";
+  const runs = positionals.map(loadResults);
+  const out = values.out ?? "site/index.html";
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, leaderboardHtml(runs, { title: values.title }));
   console.log(`wrote ${out}`);
@@ -190,8 +236,15 @@ async function main() {
       return cmdValidate(rest);
     case "list":
       return cmdList(rest);
-    default:
+    case undefined:
+    case "help":
+    case "--help":
+    case "-h":
       console.log(HELP);
+      return;
+    default:
+      console.error(HELP);
+      throw new Error(`unknown command "${cmd}"`);
   }
 }
 

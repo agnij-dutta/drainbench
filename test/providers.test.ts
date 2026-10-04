@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { toAnthropic } from "../src/providers/anthropic.js";
-import { makeProvider } from "../src/providers/index.js";
+import { makeProvider, registerProvider } from "../src/providers/index.js";
 import { OpenAICompatProvider, parseArgs, toOpenAIMessages } from "../src/providers/openai.js";
 import { TOOLS } from "../src/tools.js";
 import type { Message } from "../src/types.js";
@@ -87,5 +87,17 @@ describe("makeProvider", () => {
     expect(() => makeProvider("groq:llama", {})).toThrow("GROQ_API_KEY");
     expect(makeProvider("groq:llama", { GROQ_API_KEY: "x" }).id).toBe("groq:llama");
     expect(makeProvider("anthropic:claude-haiku-4-5", { ANTHROPIC_API_KEY: "x" }).synthetic).toBe(false);
+  });
+  it("rejects unknown providers and empty model names with the list of known providers", () => {
+    expect(() => makeProvider("nope:model")).toThrow(/known: .*mock/);
+    expect(() => makeProvider("mock:")).toThrow("empty model name");
+  });
+  it("compat needs no key and reads its base URL at call time", () => {
+    expect(makeProvider("compat:llama3.1", { DRAINBENCH_COMPAT_BASE_URL: "http://localhost:8000/v1" }).id).toBe("compat:llama3.1");
+  });
+  it("registerProvider adds a provider without touching the registry source", () => {
+    registerProvider("echo", (spec) => ({ id: spec, synthetic: true, complete: async () => ({ content: "", toolCalls: [] }) }));
+    expect(makeProvider("echo:anything").id).toBe("echo:anything");
+    expect(() => registerProvider("Bad Name", () => makeProvider("mock:naive"))).toThrow();
   });
 });

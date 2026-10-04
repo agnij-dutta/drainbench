@@ -4,13 +4,18 @@ import type { Message, ToolCall } from "../types.js";
 import { postJson, type RetryOptions } from "./http.js";
 import { type CompletionRequest, type CompletionResponse, type Provider, ProviderError } from "./types.js";
 
+/**
+ * OpenAI-compatible endpoints. Adding a hosted provider that speaks Chat
+ * Completions is one line here: a base URL and the env var holding its key.
+ * `compat` is the generic escape hatch; its base URL is read at call time
+ * from DRAINBENCH_COMPAT_BASE_URL (see providers/index.ts).
+ */
 export const OPENAI_COMPAT_PRESETS: Record<string, { baseUrl: string; keyEnv: string }> = {
   openai: { baseUrl: "https://api.openai.com/v1", keyEnv: "OPENAI_API_KEY" },
   groq: { baseUrl: "https://api.groq.com/openai/v1", keyEnv: "GROQ_API_KEY" },
   openrouter: { baseUrl: "https://openrouter.ai/api/v1", keyEnv: "OPENROUTER_API_KEY" },
   together: { baseUrl: "https://api.together.xyz/v1", keyEnv: "TOGETHER_API_KEY" },
-  // generic: set DRAINBENCH_COMPAT_BASE_URL and DRAINBENCH_COMPAT_API_KEY
-  compat: { baseUrl: process.env.DRAINBENCH_COMPAT_BASE_URL ?? "http://localhost:11434/v1", keyEnv: "DRAINBENCH_COMPAT_API_KEY" },
+  compat: { baseUrl: "http://localhost:11434/v1", keyEnv: "DRAINBENCH_COMPAT_API_KEY" },
 };
 
 interface OAIToolCall {
@@ -52,6 +57,7 @@ function toOpenAIMessage(m: Message): unknown {
   }
 }
 
+/** Parse tool-call arguments. Malformed JSON is kept as `{ _raw }` so the call still reaches the rail and is denied there, not silently dropped. */
 export function parseArgs(raw: string | undefined): Record<string, unknown> {
   if (!raw) return {};
   try {
@@ -62,6 +68,7 @@ export function parseArgs(raw: string | undefined): Record<string, unknown> {
   }
 }
 
+/** Chat Completions adapter with tool calling. Temperature defaults to 0. */
 export class OpenAICompatProvider implements Provider {
   readonly synthetic = false;
   constructor(

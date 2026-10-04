@@ -43,9 +43,30 @@ describe("outputs", () => {
     const md = markdownReport(r);
     const html = leaderboardHtml([r]);
     for (const s of [md, html]) expect(s).not.toContain("\u2014");
-    expect(md).toContain("Synthetic run");
-    expect(html).toContain("SYNTHETIC RUN");
+    expect(md).toContain("MOCK RESULTS");
+    expect(md).toContain("mock:naive (MOCK)");
+    expect(html).toContain("MOCK RESULTS");
+    expect(html).toContain('<span class="tag">MOCK</span>');
     expect(html).toContain("mock:naive");
     expect(html).toContain("Enforced cap (Capline)");
+  });
+  it("labels mock rows even when merged with a real run, and keeps them out of the headline", async () => {
+    const mock = await mockRun();
+    const rename = (m: string) => (m === "mock:oracle" ? "acme:real-model" : m);
+    const real: RunResult = {
+      ...mock,
+      runId: "real",
+      synthetic: false,
+      models: ["acme:real-model"],
+      results: mock.results.filter((x) => x.model === "mock:oracle").map((x) => ({ ...x, model: rename(x.model) })),
+    };
+    const html = leaderboardHtml([mock, real]);
+    expect(html).toContain("MOCK RESULTS");
+    expect(html).toMatch(/mock:naive <span class="tag">MOCK<\/span>/);
+    expect(html).not.toMatch(/acme:real-model <span class="tag">/);
+    // the oracle-like real row lost nothing; the naive mock row must not leak into "worst model"
+    const hero = html.slice(html.indexOf('<section class="hero">'), html.indexOf("</section>"));
+    expect(hero).toContain("acme:real-model");
+    expect(hero).not.toContain("mock:naive");
   });
 });
