@@ -7,7 +7,8 @@
 //   Layer B, MandateRegistry.settle(): the on-chain backstop. It re-checks
 //     every rule and reverts before USDC moves, even when the key is stolen.
 //
-// Rule order follows MandateRegistry.settle():
+// Rule order follows MandateRegistry.settle() (checked against Capline commit
+// f5f3e7c, contracts/src/MandateRegistry.sol):
 //   revoked -> expired -> per-tx -> cumulative -> payee
 // Drainbench adds three checks that the contract gets for free from its types
 // and wiring, so a simulated payment can never be "more valid" than a real one:

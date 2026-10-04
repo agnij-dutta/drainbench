@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use Drainbench in your research, please cite it as below."
+title: "Drainbench: a prompt-injection benchmark for LLM agents with a payment tool"
+abstract: >-
+  Drainbench measures how often LLM agents holding a pay() tool are prompt-injected
+  into unauthorized payments, and how much money each defense layer (none, system-prompt
+  policy, off-chain policy gate, enforced on-chain cap) prevents, separating attempted
+  payments from settled losses and adding a key-compromise threat model.
+type: software
+authors:
+  - family-names: Dutta
+    given-names: Agnij
+    alias: "0xholmesdev"
+repository-code: "https://github.com/agnij-dutta/drainbench"
+url: "https://github.com/agnij-dutta/drainbench"
+license: MIT
+version: 0.1.0
+date-released: "2026-10-05"
+keywords:
+  - prompt injection
+  - LLM agents
+  - agent security
+  - benchmark
+  - payments
+  - x402
