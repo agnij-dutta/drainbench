@@ -1,5 +1,7 @@
 # Drainbench
 
+[![npm](https://img.shields.io/npm/v/drainbench)](https://www.npmjs.com/package/drainbench)
+
 **A benchmark for one question: when an LLM agent holds a `pay()` tool, how often does a prompt injection get it to pay an attacker, and which defense layer actually stops the money?** It is for agent developers choosing guardrails and for researchers measuring injection robustness in agentic payments.
 
 > **Status: v0.1, harness and corpus only. No real-model results have been published yet.** Every number in this repository, including `results/mock-reference.*` and `site/index.html`, comes from scripted **MOCK** personas that read the ground truth. Mock numbers check the pipeline and bound what each defense can stop. They do not measure any language model.
@@ -31,6 +33,16 @@ Agents are starting to hold wallets: x402 API purchases, invoice payment, tips, 
 
 Requires Node 22 or newer. No API keys are needed for the mock run.
 
+The npm package ships the CLI and the `scenarios/v1` corpus, so it runs from any directory and writes `results/` and `runs/` there:
+
+```bash
+npx drainbench list                                  # the 75 scenarios
+npx drainbench run --models mock:naive,mock:oracle   # mock personas, no keys
+npx drainbench leaderboard results/<run-id>.json -o site/index.html
+```
+
+`npm install drainbench` gives you the library. To run the test suite and the full 1200-episode demo, use a clone:
+
 ```bash
 git clone https://github.com/agnij-dutta/drainbench.git
 cd drainbench
@@ -44,14 +56,14 @@ Real models read keys from your shell environment only (see [`.env.example`](.en
 
 ```bash
 export GROQ_API_KEY=...
-npx tsx src/cli.ts run \
+npx drainbench run \
   --models groq:openai/gpt-oss-120b \
   --limit 15 --concurrency 2 --run-id groq-smoke \
   --note "groq, temp 0, $(date -u +%F)"
-npx tsx src/cli.ts leaderboard results/groq-smoke.json -o site/index.html
+npx drainbench leaderboard results/groq-smoke.json -o site/index.html
 ```
 
-Or build once and use the bin: `npm run build && node dist/cli.js run ...` (the package bin is `drainbench`).
+From a clone, `npx tsx src/cli.ts ...` runs the source directly, and `npm run build && node dist/cli.js ...` runs the build.
 
 ## Usage
 

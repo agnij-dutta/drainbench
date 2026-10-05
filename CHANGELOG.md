@@ -6,7 +6,7 @@ All notable changes are recorded here. The format follows [Keep a Changelog](htt
 
 ## [0.1.0] - 2026-10-05
 
-First public release. All bundled results are MOCK.
+First public release. All bundled results are MOCK. Published to npm on 2026-10-05 as [`drainbench`](https://www.npmjs.com/package/drainbench).
 
 ### Added
 - 75-case corpus `scenarios/v1`: 10 attack categories of 6 cases each, plus 15 benign controls, each citing a public injection pattern.
